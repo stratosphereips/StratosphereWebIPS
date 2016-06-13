@@ -148,21 +148,26 @@ class Tuple(object):
         if self.verbose > 2:
             print '\nAdding flow {}'.format(column_values)
         # Get the starttime
-        self.datetime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        # self.datetime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        #self.datetime = datetime.fromtimestamp(float(column_values[0]), tz=None).strftime('%Y/%m/%d %H:%M:%S.%f')
+        self.datetime = datetime.fromtimestamp(float(column_values[0]), tz=None)
         # Get the size
         try:
-            self.current_size = float(column_values[12])
+            #self.current_size = float(column_values[12])
+            self.current_size = float(column_values[3]) + float(column_values[6])
         except ValueError:
             # It can happend that we dont have this value in the binetflow
             self.current_size = 0.0
         # Get the duration
         try:
-            self.current_duration = float(column_values[1])
+            #self.current_duration = float(column_values[1])
+            # All the times should be sum because justsniffer is spitting them
+            self.current_duration = float(column_values[12]) + float(column_values[13]) + float(column_values[14]) + float(column_values[15]) + float(column_values[16]) + float(column_values[17]) 
         except ValueError:
             # It can happend that we dont have this value in the binetflow
             self.current_duration = 0.0
-        # Get the proto
-        self.proto = str(column_values[2])
+        # Get the proto (method of http)
+        self.proto = str(column_values[8])
         # Get the amount of flows
         self.amount_of_flows += 1
         # Update value of T1
@@ -459,11 +464,14 @@ class Processor(multiprocessing.Process):
         for id in ids_to_delete:
             del self.tuples[id]
         # Move the time slot
-        self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        #self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        #self.slot_starttime = datetime.fromtimestamp(float(column_values[0]), tz=None).strftime('%Y/%m/%d %H:%M:%S.%f')
+        self.slot_starttime = datetime.fromtimestamp(float(column_values[0]), tz=None)
         self.slot_endtime = self.slot_starttime + self.slot_width
 
         # Put the last flow received in the next slot, because it overcommed the threshold and it was not processed
-        tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+        #tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+        tuple4 = column_values[11]+'-'+column_values[10]+'-'+column_values[1]+'-'+column_values[8]
         tuple = self.get_tuple(tuple4)
         if self.verbose:
             if len(tuple.state) == 0:
@@ -514,21 +522,27 @@ class Processor(multiprocessing.Process):
                     line = self.queue.get()
                     if 'stop' != line:
                         # Process this flow
-                        nline = ','.join(line.strip().split(',')[:13])
+                        field_separator = '|'
                         try:
-                            column_values = nline.split(',')
-                            # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
+                            column_values = line.split(field_separator)
+                            # 0 timestamp| 1 s-port| 2 sc-http-status| 3 sc-bytes| 4 sc-header-bytes| 5 c-port| 6 cs-bytes| 7 cs-header-bytes| 8 cs-method| 9 cs-url| 10 s-ip| 11 c-ip| 12 connection.time| 13 request.time| 14 response.time| 15 close.time| 16 idle.time0| 17 idle.time1| 18 cs-mime-type| 19 cs(Referer)| 20 cs(User-Agent)
                             if self.slot_starttime == -1:
                                 # First flow
                                 try:
-                                    self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                                    # Unix time to format
+                                    #self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                                    #self.slot_starttime = datetime.fromtimestamp(float(column_values[0]), tz=None).strftime('%Y/%m/%d %H:%M:%S.%f')
+                                    self.slot_starttime = datetime.fromtimestamp(float(column_values[0]), tz=None)
                                 except ValueError:
                                     continue
                                 self.slot_endtime = self.slot_starttime + self.slot_width
-                            flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                            #flowtime = datetime.fromtimestamp(float(column_values[0]), tz=None).strftime('%Y/%m/%d %H:%M:%S.%f')
+                            flowtime = datetime.fromtimestamp(float(column_values[0]), tz=None)
                             if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                 # Inside the slot
-                                tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                #tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                # client ip-server ip-server port-protocol (we are using the HTTP method as protocol separator here)
+                                tuple4 = column_values[11]+'-'+column_values[10]+'-'+column_values[1]+'-'+column_values[8]
                                 tuple = self.get_tuple(tuple4)
                                 if self.verbose:
                                     if len(tuple.state) == 0:
@@ -567,7 +581,7 @@ class Processor(multiprocessing.Process):
 ####################
 # Main
 ####################
-print 'Stratosphere Linux IPS. Version {}\n'.format(version)
+print 'Stratosphere Linux Web IPS. Version {}\n'.format(version)
 
 # Parse the parameters
 parser = argparse.ArgumentParser()
